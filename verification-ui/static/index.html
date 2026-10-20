@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pipeline Verification</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <h1>Pipeline Verification</h1>
+        <p class="subtitle">NYC taxi · batch ETL &amp; real-time streaming · live checks against every running component</p>
+      </div>
+      <div class="controls">
+        <label class="toggle"><input type="checkbox" id="only-problems"> Only problems</label>
+        <label class="toggle"><input type="checkbox" id="auto-refresh"> Auto-refresh 30 s</label>
+        <button id="run" type="button">Run checks</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="summary" aria-label="Summary">
+      <div class="tile tile-pass"><span class="tile-label">Passed</span><span class="tile-value" id="n-pass">–</span></div>
+      <div class="tile tile-warn"><span class="tile-label">Warnings</span><span class="tile-value" id="n-warn">–</span></div>
+      <div class="tile tile-fail"><span class="tile-label">Failed</span><span class="tile-value" id="n-fail">–</span></div>
+      <div class="tile"><span class="tile-label">Informational</span><span class="tile-value" id="n-info">–</span></div>
+      <div class="tile tile-meta">
+        <span class="tile-label">Last run</span>
+        <span class="tile-meta-value" id="last-run">not yet</span>
+        <span class="tile-meta-sub" id="duration"></span>
+      </div>
+    </section>
+
+    <nav class="links" id="links" aria-label="Component links"></nav>
+
+    <div id="status-line" class="status-line" role="status">Running checks… the referential-integrity check scans ~6 M rows and takes a few seconds.</div>
+
+    <div id="groups"></div>
+  </main>
+
+  <footer>
+    Served by <code>verification-ui/server.py</code> · every check runs live on each refresh (no cached results)
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

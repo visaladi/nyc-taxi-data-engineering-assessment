@@ -1,0 +1,10 @@
+apiVersion: 1
+
+providers:
+  - name: taxi-streaming
+    folder: NYC Taxi
+    type: file
+    disableDeletion: true
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

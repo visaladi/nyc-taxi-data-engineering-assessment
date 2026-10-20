@@ -1,0 +1,22 @@
+flowchart TD
+    startRun["CLI run or scheduled Prefect deployment"] --> prepareDb["Prepare schema and location dimension"]
+    prepareDb --> nextMonth["Start monthly sub-flow and audit record"]
+    nextMonth --> downloadFile["Download or reuse valid trip Parquet"]
+    downloadFile --> extractTrips["Extract trips and validate source schema"]
+    extractTrips --> cleanTrips["Apply 10 data-quality rules"]
+    cleanTrips -->|"Rejected rows"| rejectedRows[("Rejected Parquet files")]
+    cleanTrips -->|"Accepted rows"| buildFacts["Build dimension keys and fact measures"]
+    buildFacts --> loadMonth["Replace source rows using DELETE and COPY in one transaction"]
+    loadMonth --> verifyLoad{"Row count and dimension integrity valid?"}
+    verifyLoad -->|"Yes"| commitLoad["Commit monthly load and record success"]
+    verifyLoad -->|"No"| rollbackLoad["Roll back monthly load and record failure"]
+    downloadFile -.->|"Failure after retries"| failedMonth["Record monthly failure"]
+    rollbackLoad --> moreMonths{"More months?"}
+    failedMonth --> moreMonths
+    commitLoad --> moreMonths
+    moreMonths -->|"Yes"| nextMonth
+    moreMonths -->|"No"| refreshAgg["Refresh hourly aggregates if any month succeeded"]
+    refreshAgg --> summaryRun["Publish Prefect summary artifact and pipeline log"]
+    summaryRun --> anyFailed{"Any month failed?"}
+    anyFailed -->|"Yes"| alertFailure["Fail parent flow and send configured failure alert"]
+    anyFailed -->|"No"| completeRun["Complete flow; analytics ready in Streamlit"]

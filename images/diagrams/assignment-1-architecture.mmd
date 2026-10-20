@@ -1,0 +1,45 @@
+flowchart LR
+    subgraph sources["Data sources"]
+        tlcSource["NYC TLC trip Parquet and zone lookup CSV"]
+        syntheticData["Optional synthetic data generator"]
+        rawFiles[("Shared data/raw directory")]
+    end
+    subgraph batchApp["Python batch application"]
+        prefectFlow["Prefect flow, monthly sub-flows, retries and hooks"]
+        extractModule["Extract: downloads and schema validation"]
+        transformModule["Transform: cleaning and dimension mapping"]
+        loadModule["Load: transactional COPY and integrity checks"]
+    end
+    subgraph warehouse["PostgreSQL 16 in Docker"]
+        dimensions[("Six conformed dimensions")]
+        factTrips[("Monthly partitioned fact_taxi_trips")]
+        hourlyAgg[("agg_trips_hourly materialized view")]
+        auditLog[("etl_run_log audit table")]
+    end
+    subgraph userInterfaces["Analytics and operations"]
+        streamlitUi["Streamlit dashboard :8501"]
+        prefectUi["Prefect UI :4200"]
+        verificationUi["Verification console :8765"]
+    end
+    rejectedFiles[("data/rejected Parquet files")]
+    jsonLogs[("Structured pipeline logs and failure alerts")]
+    tlcSource --> rawFiles
+    syntheticData --> rawFiles
+    rawFiles --> extractModule
+    prefectFlow -.->|"Orchestrates"| extractModule
+    prefectFlow -.->|"Orchestrates"| transformModule
+    prefectFlow -.->|"Orchestrates"| loadModule
+    extractModule --> transformModule --> loadModule
+    transformModule --> rejectedFiles
+    loadModule --> dimensions
+    loadModule --> factTrips
+    dimensions --- factTrips
+    factTrips -->|"Refresh after loading"| hourlyAgg
+    prefectFlow --> auditLog
+    prefectFlow --> jsonLogs
+    prefectFlow -.->|"Run states and artifacts"| prefectUi
+    hourlyAgg --> streamlitUi
+    auditLog --> streamlitUi
+    verificationUi -.->|"SQL checks"| warehouse
+    verificationUi -.->|"Health checks"| streamlitUi
+    verificationUi -.->|"Run history checks"| prefectUi

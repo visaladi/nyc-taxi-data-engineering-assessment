@@ -1,0 +1,29 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Cluster health, topic offsets and consumer-group lag (committed offsets).
+  - job_name: kafka-exporter
+    static_configs:
+      - targets: ["kafka-exporter:9308"]
+
+  - job_name: taxi-producer
+    static_configs:
+      - targets: ["producer:8000"]
+
+  # Docker's embedded DNS returns one A record per replica, so scaling the processor
+  # (`--scale stream-processor=3`) is picked up without config changes.
+  - job_name: stream-processor
+    dns_sd_configs:
+      - names: ["stream-processor"]
+        type: A
+        port: 8001
+        refresh_interval: 15s

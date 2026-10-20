@@ -1,0 +1,354 @@
+﻿{
+    "generated_at":  "2026-10-20T04:48:40+00:00",
+    "duration_s":  41.2,
+    "groups":  [
+                   {
+                       "id":  "batch",
+                       "title":  "Assignment 1 · Batch ETL \u0026 star schema",
+                       "checks":  [
+                                      {
+                                          "name":  "PostgreSQL container",
+                                          "status":  "pass",
+                                          "value":  "1/1 up",
+                                          "detail":  "taxi-batch-postgres (Up 51 minutes (healthy))",
+                                          "ms":  1178
+                                      },
+                                      {
+                                          "name":  "Star schema objects",
+                                          "status":  "pass",
+                                          "value":  "star schema present",
+                                          "detail":  "1 fact + 6 dimensions + run log + hourly aggregate",
+                                          "ms":  1717
+                                      },
+                                      {
+                                          "name":  "Dimension tables populated",
+                                          "status":  "pass",
+                                          "value":  "7,568 rows",
+                                          "detail":  "dim_date=5,844, dim_time=1,440, dim_location=265, dim_vendor=5, dim_rate_code=7, dim_payment_type=7",
+                                          "ms":  1113
+                                      },
+                                      {
+                                          "name":  "Fact table partitions",
+                                          "status":  "pass",
+                                          "value":  "5,843,620 trips",
+                                          "detail":  "partitions: fact_taxi_trips_2023_01, fact_taxi_trips_2023_02 · yellow_tripdata_2023-01.parquet: 2,995,776 · yellow_tripdata_2023-02.parquet: 2,847,844",
+                                          "ms":  41180
+                                      },
+                                      {
+                                          "name":  "Latest pipeline run per file",
+                                          "status":  "pass",
+                                          "value":  "2/2 files succeeded",
+                                          "detail":  "yellow_tripdata_2023-01.parquet: success, 3,066,766 in / 70,990 rejected / 2,995,776 loaded in 325s · yellow_tripdata_2023-02.parquet: success, 2,913,955 in / 66,111 rejected / 2,847,844 loaded in 313s",
+                                          "ms":  1094
+                                      },
+                                      {
+                                          "name":  "Run log reconciles with fact table",
+                                          "status":  "pass",
+                                          "value":  "run log = table",
+                                          "detail":  "2 source files reconcile exactly",
+                                          "ms":  41177
+                                      },
+                                      {
+                                          "name":  "Referential integrity (orphan check)",
+                                          "status":  "pass",
+                                          "value":  "0 orphans",
+                                          "detail":  "every fact row joins to all 6 dimensions",
+                                          "ms":  41200
+                                      },
+                                      {
+                                          "name":  "Data-quality rules hold in the fact table",
+                                          "status":  "pass",
+                                          "value":  "0 violations",
+                                          "detail":  "negative amounts=0, non-positive distance=0, dropoff\u003c=pickup=0, duration\u003e6h=0",
+                                          "ms":  41175
+                                      },
+                                      {
+                                          "name":  "Aggregate table consistent with fact",
+                                          "status":  "pass",
+                                          "value":  "5,843,620 = 5,843,620",
+                                          "detail":  "SUM(trips) in agg_trips_hourly vs COUNT(*) in fact_taxi_trips",
+                                          "ms":  8258
+                                      },
+                                      {
+                                          "name":  "Business metrics (fare/mile, peak hours, revenue)",
+                                          "status":  "info",
+                                          "value":  "$5.46 per mile",
+                                          "detail":  "peak hours: 18:00, 17:00, 16:00 · revenue: Credit card $131.3M (82.3%), Cash $23.1M (14.5%)",
+                                          "ms":  2439
+                                      },
+                                      {
+                                          "name":  "Structured logs \u0026 alerts",
+                                          "status":  "pass",
+                                          "value":  "last: pipeline.succeeded",
+                                          "detail":  "32 structured events, 0 ERROR records, 0 alerts in alerts.jsonl · last at 2026-10-19T11:55:30.894+00:00",
+                                          "ms":  31
+                                      },
+                                      {
+                                          "name":  "Rejected rows kept for audit",
+                                          "status":  "pass",
+                                          "value":  "2 files",
+                                          "detail":  "rejected_yellow_tripdata_2023-01.parquet (1893 KB), rejected_yellow_tripdata_2023-02.parquet (1750 KB)",
+                                          "ms":  29
+                                      },
+                                      {
+                                          "name":  "Streamlit dashboard reachable",
+                                          "status":  "pass",
+                                          "value":  "ok",
+                                          "detail":  "http://localhost:8501 is serving the dashboard",
+                                          "ms":  319
+                                      }
+                                  ]
+                   },
+                   {
+                       "id":  "kafka",
+                       "title":  "Assignment 2 · Kafka cluster",
+                       "checks":  [
+                                      {
+                                          "name":  "Broker containers",
+                                          "status":  "pass",
+                                          "value":  "3/3 up",
+                                          "detail":  "kafka-1 (Up 51 minutes (healthy)), kafka-2 (Up 51 minutes (healthy)), kafka-3 (Up 51 minutes (healthy))",
+                                          "ms":  1568
+                                      },
+                                      {
+                                          "name":  "Topic creation job (kafka-init)",
+                                          "status":  "pass",
+                                          "value":  "Exited (0) 40 minutes ago",
+                                          "detail":  "one-shot topic creation job",
+                                          "ms":  1549
+                                      },
+                                      {
+                                          "name":  "Brokers in cluster metadata",
+                                          "status":  "pass",
+                                          "value":  "3 / 3 brokers",
+                                          "detail":  "from kafka-exporter (cluster metadata)",
+                                          "ms":  421
+                                      },
+                                      {
+                                          "name":  "KRaft controller quorum",
+                                          "status":  "pass",
+                                          "value":  "leader node 2",
+                                          "detail":  "KRaft voters: 1, 2, 3 · epoch 38",
+                                          "ms":  13811
+                                      },
+                                      {
+                                          "name":  "Topic taxi-trips-stream configuration",
+                                          "status":  "pass",
+                                          "value":  "6 partitions · RF 3",
+                                          "detail":  "6 partitions, RF 3, min.insync.replicas=2, ISR sizes [3, 3, 3, 3, 3, 3], leaders on brokers [\u00271\u0027, \u00272\u0027, \u00273\u0027]",
+                                          "ms":  13976
+                                      },
+                                      {
+                                          "name":  "Replication health",
+                                          "status":  "pass",
+                                          "value":  "0 under-replicated",
+                                          "detail":  "0 partitions without leader",
+                                          "ms":  180
+                                      },
+                                      {
+                                          "name":  "Dead-letter topic",
+                                          "status":  "pass",
+                                          "value":  "present",
+                                          "detail":  "topics: taxi-trips-dlq, taxi-trips-stream",
+                                          "ms":  13073
+                                      },
+                                      {
+                                          "name":  "Consumer group assignment \u0026 lag",
+                                          "status":  "pass",
+                                          "value":  "1 consumers · lag 29",
+                                          "detail":  "…42cf0f98: partitions 0,1,2,3,4,5",
+                                          "ms":  13340
+                                      }
+                                  ]
+                   },
+                   {
+                       "id":  "stream",
+                       "title":  "Assignment 2 · Streaming pipeline \u0026 TimescaleDB",
+                       "checks":  [
+                                      {
+                                          "name":  "Pipeline containers",
+                                          "status":  "pass",
+                                          "value":  "3/3 up",
+                                          "detail":  "taxi-timescaledb (Up 51 minutes (healthy)), taxi-producer (Up 40 minutes), taxi-streaming-stream-processor-1 (Up 40 minutes)",
+                                          "ms":  905
+                                      },
+                                      {
+                                          "name":  "Producer send rate (10–50 ev/s)",
+                                          "status":  "pass",
+                                          "value":  "46.6 events/s",
+                                          "detail":  "target now 38.6/s (10–50 wave) · 72,481 acknowledged so far",
+                                          "ms":  69
+                                      },
+                                      {
+                                          "name":  "Producer delivery health",
+                                          "status":  "pass",
+                                          "value":  "0 delivery failures",
+                                          "detail":  "acks=all p95 100 ms · 3,566 events delayed for out-of-order · 36 held now",
+                                          "ms":  98
+                                      },
+                                      {
+                                          "name":  "Processor consumption",
+                                          "status":  "pass",
+                                          "value":  "46.5 events/s",
+                                          "detail":  "1 processor instance(s) scraped",
+                                          "ms":  54
+                                      },
+                                      {
+                                          "name":  "Consumer lag \u0026 backpressure",
+                                          "status":  "pass",
+                                          "value":  "lag 39",
+                                          "detail":  "DB backpressure: none",
+                                          "ms":  43
+                                      },
+                                      {
+                                          "name":  "End-to-end latency",
+                                          "status":  "pass",
+                                          "value":  "p95 1.79 s",
+                                          "detail":  "p50 0.68 s · micro-batch p95 128 ms (last 1 min; includes producer hold-back)",
+                                          "ms":  70
+                                      },
+                                      {
+                                          "name":  "Event outcomes (inserted / late / duplicate / invalid)",
+                                          "status":  "pass",
+                                          "value":  "0.13% late",
+                                          "detail":  "duplicate=44,836 · inserted=27,622 · invalid=0 · late=36 (since processor start, 72,494 total)",
+                                          "ms":  17
+                                      },
+                                      {
+                                          "name":  "Raw events in TimescaleDB",
+                                          "status":  "pass",
+                                          "value":  "72,610 events",
+                                          "detail":  "72,610 distinct ids (no duplicates = idempotent sink) · 259 late · 6 partitions · event time 2023-01-01 00:00 → 2023-01-01 22:31",
+                                          "ms":  2120
+                                      },
+                                      {
+                                          "name":  "Sliding-window aggregates",
+                                          "status":  "pass",
+                                          "value":  "1,811 window rows",
+                                          "detail":  "1,789 final · 9 borough keys incl. ALL · last final window 22:05–22:20 (2023-01-01): 633 trips, $19,941",
+                                          "ms":  1325
+                                      },
+                                      {
+                                          "name":  "Window size \u0026 slide",
+                                          "status":  "pass",
+                                          "value":  "15 min / 5 min slide",
+                                          "detail":  "every window is 900 s long and starts on a 300 s boundary",
+                                          "ms":  649
+                                      },
+                                      {
+                                          "name":  "Window totals consistent",
+                                          "status":  "pass",
+                                          "value":  "0 mismatches",
+                                          "detail":  "\u0027ALL\u0027 row equals the sum of boroughs in all 273 windows",
+                                          "ms":  667
+                                      },
+                                      {
+                                          "name":  "Dead-letter queue",
+                                          "status":  "info",
+                                          "value":  "0 DLQ messages",
+                                          "detail":  "0 clock outliers ignored for the watermark (since start)",
+                                          "ms":  29
+                                      }
+                                  ]
+                   },
+                   {
+                       "id":  "obs",
+                       "title":  "Assignment 2 · Monitoring \u0026 observability",
+                       "checks":  [
+                                      {
+                                          "name":  "Prometheus scrape targets",
+                                          "status":  "pass",
+                                          "value":  "4/4 up",
+                                          "detail":  "jobs: kafka-exporter, prometheus, stream-processor, taxi-producer",
+                                          "ms":  40
+                                      },
+                                      {
+                                          "name":  "Prometheus alert rules loaded",
+                                          "status":  "pass",
+                                          "value":  "13 alert rules",
+                                          "detail":  "2 groups evaluated without errors",
+                                          "ms":  38
+                                      },
+                                      {
+                                          "name":  "Active alerts",
+                                          "status":  "pass",
+                                          "value":  "0 firing",
+                                          "detail":  "no pending or firing alerts",
+                                          "ms":  28
+                                      },
+                                      {
+                                          "name":  "Grafana server",
+                                          "status":  "pass",
+                                          "value":  "v11.2.0",
+                                          "detail":  "database: ok",
+                                          "ms":  291
+                                      },
+                                      {
+                                          "name":  "Grafana datasources",
+                                          "status":  "pass",
+                                          "value":  "2/2 healthy",
+                                          "detail":  "prometheus: Successfully queried the Prometheus API. · timescaledb: Database Connection OK",
+                                          "ms":  824
+                                      },
+                                      {
+                                          "name":  "Grafana dashboard provisioned",
+                                          "status":  "pass",
+                                          "value":  "25 panels",
+                                          "detail":  "“NYC Taxi - Streaming Pipeline” · rows: Kafka cluster health, Consumer lag, Pipeline throughput \u0026 latency, Event time, watermarks \u0026 sliding windows",
+                                          "ms":  441
+                                      },
+                                      {
+                                          "name":  "Prefect UI (flow-run history)",
+                                          "status":  "pass",
+                                          "value":  "16 flow runs",
+                                          "detail":  "Completed: 6, Crashed: 2, Failed: 8",
+                                          "ms":  408
+                                      },
+                                      {
+                                          "name":  "Kafka UI",
+                                          "status":  "pass",
+                                          "value":  "online",
+                                          "detail":  "local: online, 3 brokers, 3 topics",
+                                          "ms":  3118
+                                      }
+                                  ]
+                   }
+               ],
+    "links":  [
+                  {
+                      "label":  "Streamlit dashboard",
+                      "url":  "http://localhost:8501",
+                      "note":  "Assignment 1"
+                  },
+                  {
+                      "label":  "Prefect UI",
+                      "url":  "http://127.0.0.1:4200/runs",
+                      "note":  "Assignment 1 · flow runs"
+                  },
+                  {
+                      "label":  "Kafka UI",
+                      "url":  "http://localhost:8088",
+                      "note":  "Assignment 2 · topics \u0026 groups"
+                  },
+                  {
+                      "label":  "Grafana",
+                      "url":  "http://localhost:3300/d/taxi-streaming",
+                      "note":  "Assignment 2 · admin/admin"
+                  },
+                  {
+                      "label":  "Prometheus alerts",
+                      "url":  "http://localhost:9090/alerts",
+                      "note":  "Assignment 2"
+                  },
+                  {
+                      "label":  "Prometheus targets",
+                      "url":  "http://localhost:9090/targets",
+                      "note":  "Assignment 2"
+                  },
+                  {
+                      "label":  "Producer metrics",
+                      "url":  "http://localhost:8000/metrics",
+                      "note":  "Assignment 2"
+                  }
+              ]
+}

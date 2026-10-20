@@ -1,0 +1,21 @@
+flowchart TD
+    sourceData["Read trip Parquet or generate synthetic events"] --> prepareEvents["Validate source rows and assign deterministic event IDs"]
+    prepareEvents --> replayEvents["Replay at 10-50 events per second with deliberate disorder"]
+    replayEvents --> publishKafka["Publish keyed by pickup zone with acks=all and idempotence"]
+    publishKafka --> kafkaTopic[("taxi-trips-stream")]
+    kafkaTopic --> consumeBatch["Consume micro-batch"]
+    consumeBatch --> validEvent{"Valid event payload?"}
+    validEvent -->|"No"| dlqTopic[("taxi-trips-dlq")]
+    validEvent -->|"Yes"| enrichEvent["Resolve pickup borough from zone lookup"]
+    enrichEvent --> classifyEvent["Classify lateness against previous watermark; advance partition watermarks"]
+    classifyEvent --> beginTx["Begin TimescaleDB transaction"]
+    beginTx --> rawInsert["Insert raw events; ignore existing event keys"]
+    rawInsert --> selectNew["Select newly inserted, on-time events for aggregation"]
+    selectNew --> updateWindows["Upsert 15-minute windows every 5 minutes by borough and city-wide"]
+    updateWindows --> finalizeWindows["Finalize windows passed by the watermark"]
+    finalizeWindows --> commitDb{"Database transaction committed?"}
+    commitDb -->|"No"| retryBatch["Roll back and retry with backoff; Kafka buffers events"]
+    retryBatch --> beginTx
+    commitDb -->|"Yes"| commitOffsets["Commit Kafka offsets after database commit"]
+    dlqTopic -.->|"After remaining valid events commit"| commitOffsets
+    commitOffsets --> consumeBatch

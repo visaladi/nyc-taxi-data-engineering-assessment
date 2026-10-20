@@ -1,0 +1,38 @@
+name: taxi-batch
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: taxi-batch-postgres
+    restart: unless-stopped
+    # Docker's default 64MB /dev/shm is too small for parallel query / vacuum workers.
+    shm_size: 1g
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-taxi_dw}
+      POSTGRES_USER: ${POSTGRES_USER:-taxi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taxi}
+    ports:
+      - "${POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      # Executed only on first start (empty volume); setup.sh and the flow re-apply it idempotently.
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    # Modest tuning for bulk loads on a laptop.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - work_mem=64MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_wal_size=2GB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  pg-data:

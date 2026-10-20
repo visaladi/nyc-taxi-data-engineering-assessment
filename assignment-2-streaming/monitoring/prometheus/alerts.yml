@@ -1,0 +1,96 @@
+groups:
+  - name: kafka-cluster
+    rules:
+      - alert: KafkaBrokerDown
+        expr: kafka_brokers < 3
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Only {{ $value }} of 3 Kafka brokers are reachable"
+
+      - alert: KafkaUnderReplicatedPartitions
+        expr: sum(kafka_topic_partition_under_replicated_partition{topic=~"taxi-.*"}) > 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value }} partitions are under-replicated"
+
+      - alert: KafkaPartitionWithoutLeader
+        expr: count(kafka_topic_partition_leader{topic=~"taxi-.*"} == -1) > 0
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "Partitions without a leader - producers and consumers are blocked"
+
+      - alert: KafkaExporterDown
+        expr: up{job="kafka-exporter"} == 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "kafka-exporter is down - cluster metrics are blind"
+
+  - name: taxi-pipeline
+    rules:
+      - alert: ConsumerLagHigh
+        expr: sum(kafka_consumergroup_lag{consumergroup="taxi-stream-processor", topic="taxi-trips-stream"}) > 5000
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Stream processor is {{ $value }} messages behind"
+
+      - alert: ConsumerLagGrowing
+        expr: deriv(sum(kafka_consumergroup_lag{consumergroup="taxi-stream-processor", topic="taxi-trips-stream"})[10m:30s]) > 1
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Consumer lag has grown steadily for 10 minutes - processor cannot keep up"
+
+      - alert: StreamProcessorDown
+        expr: absent(up{job="stream-processor"} == 1)
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "No stream-processor instance is up"
+
+      - alert: ProducerStalled
+        expr: rate(taxi_producer_events_sent_total[2m]) == 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Producer has not delivered any events for 2 minutes"
+
+      - alert: ProducerDeliveryFailures
+        expr: increase(taxi_producer_delivery_failures_total[5m]) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Producer failed to deliver {{ $value }} events in the last 5 minutes"
+
+      - alert: DatabaseBackpressure
+        expr: max(taxi_processor_db_backpressure) == 1
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Stream processor is blocked retrying TimescaleDB writes"
+
+      - alert: HighLateEventRatio
+        expr: |
+          sum(rate(taxi_processor_events_total{outcome="late"}[5m]))
+            / sum(rate(taxi_processor_events_total{outcome=~"inserted|late"}[5m])) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 5% of events arrive after their windows closed - review allowed lateness"
+
+      - alert: DeadLetterEvents
+        expr: increase(taxi_processor_dlq_messages_total[5m]) > 0
+        labels: { severity: info }
+        annotations:
+          summary: "{{ $value }} invalid events were routed to taxi-trips-dlq"
+
+      - alert: EndToEndLatencyHigh
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(taxi_processor_end_to_end_latency_seconds_bucket[5m]))) > 10
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "p95 end-to-end latency is {{ $value | humanizeDuration }}"

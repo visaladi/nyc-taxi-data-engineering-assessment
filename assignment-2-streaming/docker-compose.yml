@@ -1,0 +1,224 @@
+name: taxi-streaming
+
+# -----------------------------------------------------------------------------
+# 3-node Apache Kafka cluster in KRaft mode (no ZooKeeper). Each node is both a
+# broker and a controller to keep the local footprint small; in production the
+# controller quorum runs on dedicated nodes (see README).
+# -----------------------------------------------------------------------------
+x-kafka-env: &kafka-env
+  CLUSTER_ID: "4L6g3nShT-eMCtK--X86sw"
+  KAFKA_PROCESS_ROLES: broker,controller
+  KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:29093,2@kafka-2:29093,3@kafka-3:29093
+  KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+  KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+  KAFKA_LOG_DIRS: /var/lib/kafka/data
+  # Durability defaults: every topic is replicated 3x and needs 2 in-sync replicas to accept acks=all writes.
+  KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+  KAFKA_MIN_INSYNC_REPLICAS: 2
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: "false"
+  # Topics are created explicitly (kafka-init) with reviewed settings, never by typo.
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+  KAFKA_NUM_PARTITIONS: 6
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 3000
+  KAFKA_LOG_RETENTION_HOURS: 168
+  KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+
+x-kafka-node: &kafka-node
+  image: apache/kafka:3.9.0
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 >/dev/null 2>&1"]
+    interval: 10s
+    timeout: 10s
+    retries: 12
+    start_period: 20s
+
+services:
+  kafka-1:
+    <<: *kafka-node
+    container_name: kafka-1
+    ports: ["9092:9092"]
+    volumes: ["kafka-1-data:/var/lib/kafka/data"]
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:29093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-1:19092,EXTERNAL://localhost:9092
+
+  kafka-2:
+    <<: *kafka-node
+    container_name: kafka-2
+    ports: ["9093:9093"]
+    volumes: ["kafka-2-data:/var/lib/kafka/data"]
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 2
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9093,CONTROLLER://:29093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-2:19092,EXTERNAL://localhost:9093
+
+  kafka-3:
+    <<: *kafka-node
+    container_name: kafka-3
+    ports: ["9094:9094"]
+    volumes: ["kafka-3-data:/var/lib/kafka/data"]
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 3
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9094,CONTROLLER://:29093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-3:19092,EXTERNAL://localhost:9094
+
+  # One-shot job: creates the topics with explicit partitions / replication / retention.
+  kafka-init:
+    image: apache/kafka:3.9.0
+    container_name: kafka-init
+    depends_on:
+      kafka-1: { condition: service_healthy }
+      kafka-2: { condition: service_healthy }
+      kafka-3: { condition: service_healthy }
+    volumes: ["./kafka/create-topics.sh:/scripts/create-topics.sh:ro"]
+    environment:
+      BOOTSTRAP_SERVERS: kafka-1:19092,kafka-2:19092,kafka-3:19092
+    entrypoint: ["/bin/bash", "/scripts/create-topics.sh"]
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # Storage
+  # ---------------------------------------------------------------------------
+  timescaledb:
+    image: timescale/timescaledb:2.14.2-pg16
+    container_name: taxi-timescaledb
+    restart: unless-stopped
+    shm_size: 512m
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-taxi_stream}
+      POSTGRES_USER: ${POSTGRES_USER:-taxi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taxi}
+    ports: ["${TIMESCALE_PORT:-15433}:5432"]
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # ---------------------------------------------------------------------------
+  # Pipeline applications
+  # ---------------------------------------------------------------------------
+  producer:
+    build: .
+    container_name: taxi-producer
+    restart: on-failure
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+    command: ["python", "-m", "streaming.producer"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:19092,kafka-2:19092,kafka-3:19092
+      PRODUCER_SOURCE_FILE: /data/raw/${PRODUCER_SOURCE_FILE_NAME:-yellow_tripdata_2023-01.parquet}
+      PRODUCER_RATE_PROFILE: ${PRODUCER_RATE_PROFILE:-wave}
+      PRODUCER_MIN_RATE: ${PRODUCER_MIN_RATE:-10}
+      PRODUCER_MAX_RATE: ${PRODUCER_MAX_RATE:-50}
+      PRODUCER_OUT_OF_ORDER_RATIO: ${PRODUCER_OUT_OF_ORDER_RATIO:-0.05}
+      PRODUCER_MAX_DELAY_SECONDS: ${PRODUCER_MAX_DELAY_SECONDS:-30}
+      METRICS_PORT: 8000
+    volumes: ["../data:/data:ro"]
+    ports: ["8000:8000"]
+
+  # Scalable consumer group: `docker compose up -d --scale stream-processor=3`
+  # (6 partitions => up to 6 active consumers). Prometheus discovers replicas via DNS.
+  stream-processor:
+    build: .
+    restart: on-failure
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+      timescaledb: { condition: service_healthy }
+    command: ["python", "-m", "streaming.processor"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:19092,kafka-2:19092,kafka-3:19092
+      POSTGRES_HOST: timescaledb
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-taxi_stream}
+      POSTGRES_USER: ${POSTGRES_USER:-taxi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taxi}
+      WINDOW_SIZE_SECONDS: ${WINDOW_SIZE_SECONDS:-900}
+      WINDOW_SLIDE_SECONDS: ${WINDOW_SLIDE_SECONDS:-300}
+      ALLOWED_LATENESS_SECONDS: ${ALLOWED_LATENESS_SECONDS:-600}
+      ZONE_LOOKUP_FILE: /data/raw/taxi_zone_lookup.csv
+      METRICS_PORT: 8001
+    volumes: ["../data:/data:ro"]
+
+  # ---------------------------------------------------------------------------
+  # Observability
+  # ---------------------------------------------------------------------------
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.8.0
+    container_name: taxi-kafka-exporter
+    restart: unless-stopped
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+    command:
+      - --kafka.server=kafka-1:19092
+      - --kafka.server=kafka-2:19092
+      - --kafka.server=kafka-3:19092
+      - --kafka.version=3.6.0
+      - --topic.filter=^taxi-.*
+      - --group.filter=.*
+    ports: ["9308:9308"]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: taxi-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: taxi-grafana
+    restart: unless-stopped
+    depends_on: [prometheus, timescaledb]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/taxi-streaming.json
+      TIMESCALE_USER: ${POSTGRES_USER:-taxi}
+      TIMESCALE_PASSWORD: ${POSTGRES_PASSWORD:-taxi}
+      TIMESCALE_DB: ${POSTGRES_DB:-taxi_stream}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["${GRAFANA_PORT:-3300}:3000"]
+
+  # Optional web UI for browsing topics / consumer groups: `docker compose --profile ui up -d`
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: taxi-kafka-ui
+    profiles: ["ui"]
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:19092,kafka-2:19092,kafka-3:19092
+    ports: ["${KAFKA_UI_PORT:-8088}:8080"]
+
+volumes:
+  kafka-1-data:
+  kafka-2-data:
+  kafka-3-data:
+  timescale-data:
+  prometheus-data:
+  grafana-data:

@@ -1,0 +1,13 @@
+[project]
+name = "nyc-taxi-batch-etl"
+version = "1.0.0"
+description = "Batch ETL for NYC yellow taxi trips into a PostgreSQL star schema, orchestrated with Prefect."
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"

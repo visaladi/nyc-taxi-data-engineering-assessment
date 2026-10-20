@@ -1,0 +1,41 @@
+flowchart LR
+    sharedData[("Shared trip Parquet and zone lookup CSV")]
+    syntheticSource["Synthetic event fallback"]
+    subgraph streamingApps["Python applications in Docker"]
+        producerApp["Producer: paced event replay"]
+        processorApp["Processor consumer group: validation, watermarks and windows"]
+    end
+    subgraph kafkaCluster["Kafka: 3 combined KRaft brokers"]
+        mainTopic[("taxi-trips-stream: 6 partitions, RF 3, min ISR 2")]
+        deadLetterTopic[("taxi-trips-dlq")]
+    end
+    subgraph timescaleDb["TimescaleDB in Docker :15433"]
+        rawEvents[("trip_events_raw hypertable")]
+        windowAgg[("trip_window_agg and metrics view")]
+    end
+    subgraph monitoringStack["Monitoring in Docker"]
+        kafkaExporter["Kafka exporter :9308"]
+        prometheusServer["Prometheus and alert rules :9090"]
+        grafanaUi["Grafana :3300"]
+        kafkaUi["Optional Kafka UI :8088"]
+    end
+    verificationConsole["Verification console :8765"]
+    sharedData -->|"Trips"| producerApp
+    syntheticSource --> producerApp
+    sharedData -->|"Zone enrichment"| processorApp
+    producerApp -->|"Durable publish"| mainTopic
+    mainTopic --> processorApp
+    processorApp -->|"Invalid payloads"| deadLetterTopic
+    processorApp -->|"One transaction per batch"| rawEvents
+    processorApp -->|"New on-time events only"| windowAgg
+    processorApp -.->|"Commit offsets after DB commit"| mainTopic
+    kafkaCluster -->|"Cluster metrics and lag"| kafkaExporter
+    kafkaExporter --> prometheusServer
+    producerApp -.->|"Metrics"| prometheusServer
+    processorApp -.->|"Metrics"| prometheusServer
+    prometheusServer -->|"Operational metrics"| grafanaUi
+    windowAgg -->|"SQL analytics"| grafanaUi
+    kafkaCluster --> kafkaUi
+    verificationConsole -.->|"Kafka checks"| kafkaCluster
+    verificationConsole -.->|"SQL checks"| timescaleDb
+    verificationConsole -.->|"HTTP health checks"| monitoringStack
